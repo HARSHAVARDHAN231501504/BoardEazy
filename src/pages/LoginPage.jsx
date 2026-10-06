@@ -11,14 +11,16 @@ import {
   Sparkles,
   Info,
   Mail,
-  UserPlus
+  UserPlus,
+  Phone,
+  Users
 } from 'lucide-react';
 
 export const LoginPage = () => {
   const navigate = useNavigate();
   const { loginWithCredentials } = useBoardEazy();
 
-  const [email, setEmail] = useState('harshavardhan@gmail.com');
+  const [identifier, setIdentifier] = useState('harshavardhan@gmail.com');
   const [pin, setPin] = useState('1234');
   const [error, setError] = useState('');
 
@@ -28,14 +30,20 @@ export const LoginPage = () => {
       setError('Please enter a valid 4-digit security PIN.');
       return;
     }
-    const res = loginWithCredentials(email, pin);
+    const res = loginWithCredentials(identifier, pin);
     if (res.success) {
       if (res.role === 'tte') navigate('/tte/dashboard');
       else if (res.role === 'admin') navigate('/admin-dashboard');
       else navigate('/dashboard');
     } else {
-      setError(res.message || 'Invalid Gmail address or 4-digit PIN.');
+      setError(res.message || 'Invalid Email / Mobile or 4-digit PIN.');
     }
+  };
+
+  const setQuickDemo = (id, p) => {
+    setIdentifier(id);
+    setPin(p);
+    setError('');
   };
 
   return (
@@ -92,7 +100,7 @@ export const LoginPage = () => {
             border: '1px solid var(--primary-200)',
             borderRadius: '12px',
             padding: '0.75rem 1rem',
-            marginBottom: '1.5rem',
+            marginBottom: '1.25rem',
             display: 'flex',
             alignItems: 'center',
             gap: '0.6rem',
@@ -101,7 +109,32 @@ export const LoginPage = () => {
           }}>
             <ShieldCheck size={18} color="var(--primary-600)" style={{ flexShrink: 0 }} />
             <div>
-              <strong>Zero-OTP Security:</strong> Access your account securely using your Gmail address and 4-digit biometric PIN.
+              <strong>Zero-OTP Security:</strong> Access your account securely using your Email / Mobile number and 4-digit security PIN.
+            </div>
+          </div>
+
+          {/* Quick Demo Switcher Tabs */}
+          <div style={{ marginBottom: '1.25rem' }}>
+            <span style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', display: 'block', marginBottom: '0.4rem' }}>
+              Quick Demo Accounts:
+            </span>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem' }}>
+              <button
+                type="button"
+                onClick={() => setQuickDemo('harshavardhan@gmail.com', '1234')}
+                className={`btn btn-sm ${identifier.includes('harshavardhan') ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ fontSize: '0.75rem', padding: '0.3rem 0.5rem' }}
+              >
+                Account A: Harshavardhan
+              </button>
+              <button
+                type="button"
+                onClick={() => setQuickDemo('meenakshi@gmail.com', '1234')}
+                className={`btn btn-sm ${identifier.includes('meenakshi') ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ fontSize: '0.75rem', padding: '0.3rem 0.5rem' }}
+              >
+                Account B: Meenakshi
+              </button>
             </div>
           </div>
 
@@ -122,13 +155,13 @@ export const LoginPage = () => {
           {/* Login Form */}
           <form onSubmit={handlePinSubmit}>
             <div className="form-group" style={{ marginBottom: '1rem' }}>
-              <label className="form-label">Gmail / Email ID</label>
+              <label className="form-label">Email Address or Mobile Number</label>
               <input
-                type="email"
+                type="text"
                 className="form-input"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="e.g. harshavardhan@gmail.com"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                placeholder="e.g. harshavardhan@gmail.com or 9876543210"
                 required
               />
             </div>
@@ -137,7 +170,7 @@ export const LoginPage = () => {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <label className="form-label">4-Digit Security PIN</label>
                 <span style={{ fontSize: '0.75rem', color: 'var(--primary-600)', fontWeight: 600 }}>
-                  Encrypted PIN
+                  PIN: 1234
                 </span>
               </div>
               <input
@@ -178,7 +211,7 @@ export const LoginPage = () => {
             </span>
             <Link to="/setup-profile" className="btn btn-secondary" style={{ width: '100%', fontWeight: 700 }}>
               <UserPlus size={16} />
-              Create Account with Gmail & Biometric
+              Register Account with Mobile & Biometrics
             </Link>
           </div>
 
@@ -192,7 +225,7 @@ export const LoginPage = () => {
             color: 'var(--text-muted)'
           }}>
             <Link to="/tte/login" style={{ color: 'var(--primary-700)', fontWeight: 600, textDecoration: 'none' }}>
-              🚆 TTE Official Portal Login →
+              🚆 TTE Staff Portal Login →
             </Link>
             <Link to="/admin-dashboard" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>
               Admin Ops

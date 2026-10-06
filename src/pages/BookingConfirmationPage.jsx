@@ -116,7 +116,7 @@ export const BookingConfirmationPage = () => {
               Class & Quota
             </span>
             <strong style={{ color: 'var(--primary-800)' }}>
-              {booking?.travelClass || '3A'} ({booking?.quota || 'General'})
+              {booking?.travelClass || booking?.passengers?.[0]?.classCode || 'CC'} ({booking?.quota || 'General'})
             </strong>
           </div>
         </div>

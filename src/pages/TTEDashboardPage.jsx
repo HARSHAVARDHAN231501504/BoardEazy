@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useBoardEazy } from '../context/BoardEazyContext';
+import { INITIAL_TRAINS } from '../data/mockData';
 import StatusBadge from '../components/StatusBadge';
 import SeatMap from '../components/SeatMap';
 import AIAllocationPanel from '../components/AIAllocationPanel';
@@ -17,39 +18,72 @@ import {
   Sparkles,
   Info,
   Layers,
-  MapPin
+  MapPin,
+  Phone,
+  UserCheck
 } from 'lucide-react';
 
 export const TTEDashboardPage = () => {
   const {
-    coachPassengers,
+    currentUser,
+    activeTrainNumber,
+    setActiveTrainNumber,
     selectedCoach,
     setSelectedCoach,
-    currentUser,
-    simulateNextStation15Km
+    getCoachSeatsData,
+    updatePassengerStatus
   } = useBoardEazy();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [selectedSeatDetails, setSelectedSeatDetails] = useState(null);
 
-  // Compute live occupancy metrics for selected coach
-  const totalSeats = 52;
-  const boardedCount = coachPassengers.filter(p => p.status === 'BOARDED').length;
-  const pendingCount = coachPassengers.filter(p => p.status === 'PENDING' || p.status === 'STATION_ENTERED').length;
-  const noShowCount = coachPassengers.filter(p => p.status === 'NO_SHOW').length;
-  const racAllocatedCount = coachPassengers.filter(p => p.status === 'AUTO_ALLOCATED').length;
+  // Active Train Definition
+  const activeTrain = useMemo(() => {
+    return INITIAL_TRAINS.find(t => t.number === activeTrainNumber) || INITIAL_TRAINS[0];
+  }, [activeTrainNumber]);
 
-  // Filter passengers
-  const filteredList = coachPassengers.filter(p => {
+  // Available Coaches for active train
+  const availableCoaches = useMemo(() => {
+    return activeTrain.coaches || [
+      { coachNumber: 'C1', coachType: 'CC', classCode: 'CC', capacity: 78, layoutType: 'CHAIR_CAR' },
+      { coachNumber: 'C2', coachType: 'CC', classCode: 'CC', capacity: 78, layoutType: 'CHAIR_CAR' },
+      { coachNumber: 'E1', coachType: 'EC', classCode: 'EC', capacity: 52, layoutType: 'EXEC_CHAIR_CAR' }
+    ];
+  }, [activeTrain]);
+
+  // Active Coach Definition
+  const activeCoachDef = useMemo(() => {
+    return availableCoaches.find(c => c.coachNumber === selectedCoach) || availableCoaches[0];
+  }, [availableCoaches, selectedCoach]);
+
+  // Dynamic Coach Seats data
+  const currentSeats = useMemo(() => {
+    return getCoachSeatsData(activeTrain.number, activeCoachDef.coachNumber);
+  }, [activeTrain.number, activeCoachDef.coachNumber, getCoachSeatsData]);
+
+  // Compute live occupancy metrics
+  const totalCapacity = currentSeats.length;
+  const boardedCount = currentSeats.filter(s => s.status === 'BOARDED').length;
+  const pendingCount = currentSeats.filter(s => s.status === 'PENDING' || s.status === 'STATION_ENTERED').length;
+  const noShowCount = currentSeats.filter(s => s.status === 'NO_SHOW').length;
+  const racAllocatedCount = currentSeats.filter(s => s.status === 'AUTO_ALLOCATED').length;
+
+  // Filter passengers table
+  const filteredList = currentSeats.filter(s => {
+    const passengerName = s.passenger?.name || '';
+    const subPnr = s.passenger?.subPnr || '';
+    const seatStr = s.seatNumber.toString();
+
     const matchesSearch =
-      p.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.subPnr?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.seat?.toString().includes(searchTerm);
+      !searchTerm ||
+      passengerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      subPnr.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      seatStr.includes(searchTerm);
 
     if (!matchesSearch) return false;
     if (statusFilter === 'ALL') return true;
-    return p.status === statusFilter;
+    return s.status === statusFilter;
   });
 
   return (
@@ -81,30 +115,34 @@ export const TTEDashboardPage = () => {
             </span>
           </div>
           <h1 style={{ fontSize: '1.9rem', color: 'var(--primary-900)', margin: 0 }}>
-            Train 20607 Chennai – Mysuru Vande Bharat
+            Train {activeTrain.number} – {activeTrain.name}
           </h1>
           <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-            Date: 25 September 2026 • Sector: MAS (05:50 AM) → SBC (10:20 AM) • Active Coach: <strong>{selectedCoach}</strong>
+            Route: <strong>{activeTrain.source} ➔ {activeTrain.destination}</strong> • Active Coach: <strong>{activeCoachDef.coachNumber} ({activeCoachDef.classCode})</strong>
           </span>
         </div>
 
-        {/* Live Status Indicator */}
+        {/* Train Switcher Dropdown */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <div style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '0.4rem',
-            background: '#ecfdf5',
-            color: '#065f46',
-            border: '1px solid #a7f3d0',
-            padding: '0.4rem 0.85rem',
-            borderRadius: '999px',
-            fontSize: '0.8rem',
-            fontWeight: 700
-          }}>
-            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />
-            LIVE TELEMETRY SYNCED
-          </div>
+          <label style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--primary-900)' }}>Assigned Train:</label>
+          <select
+            className="form-select"
+            value={activeTrainNumber}
+            onChange={(e) => {
+              setActiveTrainNumber(e.target.value);
+              const t = INITIAL_TRAINS.find(item => item.number === e.target.value);
+              if (t && t.coaches && t.coaches.length > 0) {
+                setSelectedCoach(t.coaches[0].coachNumber);
+              }
+            }}
+            style={{ fontWeight: 700 }}
+          >
+            {INITIAL_TRAINS.map(t => (
+              <option key={t.number} value={t.number}>
+                {t.number} - {t.name}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -125,17 +163,17 @@ export const TTEDashboardPage = () => {
           <ShieldCheck size={26} color="#d97706" />
           <div>
             <strong style={{ color: '#92400e', fontSize: '0.925rem', display: 'block' }}>
-              TTE Role Notice: MONITOR ONLY (Manual Seat Assignment Disabled)
+              TTE Role Notice: MONITOR ONLY (Manual Seat Discretion Disabled)
             </strong>
             <span style={{ fontSize: '0.8rem', color: '#b45309' }}>
-              Under BoardEazy Intelligent Operations, all vacant berths caused by no-shows are allocated autonomously by the AI Engine. The TTE strictly observes live occupancy.
+              Vacated berths are automatically reclaimed & reassigned by the BoardEazy AI Engine under RAC Priority Rules upon crossing the "Next Station + 15 km" geo-threshold.
             </span>
           </div>
         </div>
 
         <span className="badge badge-ai" style={{ fontSize: '0.72rem' }}>
           <Cpu size={12} />
-          AI ENGINE IN CHARGE
+          AUTONOMOUS AI ENGINE IN CHARGE
         </span>
       </div>
 
@@ -148,12 +186,12 @@ export const TTEDashboardPage = () => {
       }}>
         <div className="card" style={{ padding: '1.25rem', textAlign: 'center', border: '1px solid var(--border-light)' }}>
           <span style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700 }}>
-            Total Coach Capacity
+            Coach Capacity
           </span>
           <div style={{ fontSize: '2rem', fontWeight: 900, color: 'var(--primary-900)', fontFamily: 'Plus Jakarta Sans' }}>
-            {totalSeats}
+            {totalCapacity}
           </div>
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Berths in Coach {selectedCoach}</span>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Berths in Coach {activeCoachDef.coachNumber}</span>
         </div>
 
         <div className="card" style={{ padding: '1.25rem', textAlign: 'center', border: '1px solid #a7f3d0', background: 'linear-gradient(180deg, #ffffff, #f0fdf4)' }}>
@@ -163,7 +201,7 @@ export const TTEDashboardPage = () => {
           <div style={{ fontSize: '2rem', fontWeight: 900, color: '#059669', fontFamily: 'Plus Jakarta Sans' }}>
             {boardedCount}
           </div>
-          <span style={{ fontSize: '0.75rem', color: '#065f46' }}>Biometric Matched</span>
+          <span style={{ fontSize: '0.75rem', color: '#065f46' }}>Biometric Verified</span>
         </div>
 
         <div className="card" style={{ padding: '1.25rem', textAlign: 'center', border: '1px solid #fde68a', background: 'linear-gradient(180deg, #ffffff, #fffbeb)' }}>
@@ -173,7 +211,7 @@ export const TTEDashboardPage = () => {
           <div style={{ fontSize: '2rem', fontWeight: 900, color: '#d97706', fontFamily: 'Plus Jakarta Sans' }}>
             {pendingCount}
           </div>
-          <span style={{ fontSize: '0.75rem', color: '#b45309' }}>Awaiting Coach Gate</span>
+          <span style={{ fontSize: '0.75rem', color: '#b45309' }}>Awaiting Door Scan</span>
         </div>
 
         <div className="card" style={{ padding: '1.25rem', textAlign: 'center', border: '1px solid #fecaca', background: 'linear-gradient(180deg, #ffffff, #fef2f2)' }}>
@@ -193,21 +231,43 @@ export const TTEDashboardPage = () => {
           <div style={{ fontSize: '2rem', fontWeight: 900, color: '#7c3aed', fontFamily: 'Plus Jakarta Sans' }}>
             {racAllocatedCount}
           </div>
-          <span style={{ fontSize: '0.75rem', color: '#6d28d9' }}>Auto-Assigned</span>
+          <span style={{ fontSize: '0.75rem', color: '#6d28d9' }}>Reallocated</span>
         </div>
       </div>
 
-      {/* Visual Coach Seat Map */}
+      {/* Dynamic Visual Coach Seat Map */}
       <div style={{ marginBottom: '2.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--primary-900)' }}>Select Coach:</span>
+            {availableCoaches.map(c => (
+              <button
+                key={c.coachNumber}
+                type="button"
+                onClick={() => setSelectedCoach(c.coachNumber)}
+                className={`btn btn-sm ${selectedCoach === c.coachNumber ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ fontWeight: 800 }}
+              >
+                Coach {c.coachNumber} ({c.classCode})
+              </button>
+            ))}
+          </div>
+
+          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+            Layout: <strong>{activeCoachDef.layoutType}</strong> ({activeCoachDef.capacity} seats)
+          </span>
+        </div>
+
         <SeatMap
-          coach={selectedCoach}
-          passengers={coachPassengers}
+          coach={activeCoachDef.coachNumber}
+          coachDef={activeCoachDef}
+          seats={currentSeats}
           onSelectSeat={(details) => setSelectedSeatDetails(details)}
-          selectedSeat={selectedSeatDetails?.seat}
+          selectedSeat={selectedSeatDetails?.seatNumber}
         />
       </div>
 
-      {/* Interactive AI Seat Allocation Section */}
+      {/* Interactive AI Seat Allocation Panel */}
       <div style={{ marginBottom: '2.5rem' }}>
         <AIAllocationPanel />
       </div>
@@ -226,30 +286,15 @@ export const TTEDashboardPage = () => {
         }}>
           <div>
             <h3 style={{ fontSize: '1.25rem', color: 'var(--primary-900)', margin: 0 }}>
-              Coach {selectedCoach} Passenger Manifest
+              Coach {activeCoachDef.coachNumber} Passenger Manifest
             </h3>
             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-              Showing {filteredList.length} of {totalSeats} seats
+              Showing {filteredList.length} of {totalCapacity} seats
             </span>
           </div>
 
-          {/* Coach Switcher & Filter Controls */}
+          {/* Filter Controls */}
           <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Coach:</span>
-              <select
-                className="form-select"
-                value={selectedCoach}
-                onChange={(e) => setSelectedCoach(e.target.value)}
-                style={{ padding: '0.35rem 0.65rem', fontSize: '0.85rem' }}
-              >
-                <option value="C1">Coach C1 (CC)</option>
-                <option value="C2">Coach C2 (CC - Active Demo)</option>
-                <option value="C3">Coach C3 (CC)</option>
-                <option value="E1">Coach E1 (Executive EC)</option>
-              </select>
-            </div>
-
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
               <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Status:</span>
               <select
@@ -262,7 +307,7 @@ export const TTEDashboardPage = () => {
                 <option value="BOARDED">Boarded</option>
                 <option value="PENDING">Pending</option>
                 <option value="AUTO_ALLOCATED">AI Reallocated</option>
-                <option value="NO_SHOW">No-Show</option>
+                <option value="AVAILABLE">Available</option>
               </select>
             </div>
 
@@ -270,7 +315,7 @@ export const TTEDashboardPage = () => {
               <input
                 type="text"
                 className="form-input"
-                placeholder="Search passenger..."
+                placeholder="Search passenger or seat..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 style={{ padding: '0.35rem 0.65rem', fontSize: '0.85rem' }}
@@ -285,6 +330,7 @@ export const TTEDashboardPage = () => {
             <thead>
               <tr style={{ background: 'var(--primary-50)', color: 'var(--primary-900)', borderBottom: '2px solid var(--primary-200)' }}>
                 <th style={{ padding: '0.75rem 1rem' }}>Seat</th>
+                <th style={{ padding: '0.75rem 1rem' }}>Type</th>
                 <th style={{ padding: '0.75rem 1rem' }}>Sub-PNR</th>
                 <th style={{ padding: '0.75rem 1rem' }}>Passenger Name</th>
                 <th style={{ padding: '0.75rem 1rem' }}>Coach</th>
@@ -294,46 +340,51 @@ export const TTEDashboardPage = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredList.map((p) => (
+              {filteredList.map((s) => (
                 <tr
-                  key={p.seat}
+                  key={s.seatNumber}
                   style={{
                     borderBottom: '1px solid var(--border-light)',
-                    background: p.status === 'AUTO_ALLOCATED' ? '#faf5ff' : p.seat === 38 ? '#fff1f2' : '#ffffff'
+                    background: s.status === 'AUTO_ALLOCATED' ? '#faf5ff' : s.seatNumber === 38 ? '#fff1f2' : '#ffffff'
                   }}
                 >
                   <td style={{ padding: '0.75rem 1rem', fontWeight: 800, color: 'var(--primary-900)' }}>
-                    {p.seat}
+                    {s.seatNumber}
+                  </td>
+                  <td style={{ padding: '0.75rem 1rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                    {s.berthType}
                   </td>
                   <td style={{ padding: '0.75rem 1rem', fontFamily: 'JetBrains Mono', fontWeight: 700, color: 'var(--primary-700)' }}>
-                    {p.subPnr || '—'}
+                    {s.passenger?.subPnr || '—'}
                   </td>
                   <td style={{ padding: '0.75rem 1rem', fontWeight: 600 }}>
-                    {p.name}
-                    {p.isRacReallocation && (
+                    {s.passenger ? s.passenger.name : <span style={{ color: 'var(--text-muted)' }}>Vacant / Available</span>}
+                    {s.passenger?.isRacReallocation && (
                       <span style={{ fontSize: '0.7rem', color: '#7c3aed', display: 'block', fontWeight: 700 }}>
                         (AI Allocated from RAC Queue)
                       </span>
                     )}
                   </td>
                   <td style={{ padding: '0.75rem 1rem', color: 'var(--text-secondary)' }}>
-                    {selectedCoach}
+                    {activeCoachDef.coachNumber}
                   </td>
                   <td style={{ padding: '0.75rem 1rem' }}>
-                    <StatusBadge status={p.status} />
+                    <StatusBadge status={s.status} />
                   </td>
                   <td style={{ padding: '0.75rem 1rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                    {p.time || 'Awaiting Gate Scan'}
+                    {s.passenger?.time || (s.status === 'BOARDED' ? 'Verified' : '—')}
                   </td>
                   <td style={{ padding: '0.75rem 1rem' }}>
-                    {p.isRacReallocation ? (
+                    {s.passenger?.isRacReallocation ? (
                       <span className="badge badge-ai" style={{ fontSize: '0.65rem' }}>
                         AI Autonomous
                       </span>
-                    ) : (
+                    ) : s.passenger ? (
                       <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                         Original Booking
                       </span>
+                    ) : (
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>—</span>
                     )}
                   </td>
                 </tr>

@@ -21,11 +21,21 @@ import {
 
 export const PassengerDashboard = () => {
   const navigate = useNavigate();
-  const { currentUser, bookings } = useBoardEazy();
+  const { currentUser, myCreatedBookings, ticketsBookedForMe, bookings } = useBoardEazy();
   const [activeETicket, setActiveETicket] = useState(null);
   const [quickPnrInput, setQuickPnrInput] = useState('');
 
-  const activeBooking = bookings.length > 0 ? bookings[0] : null;
+  // Active booking could be created by user or booked for user
+  const activeBooking = myCreatedBookings.length > 0
+    ? myCreatedBookings[0]
+    : ticketsBookedForMe.length > 0
+    ? ticketsBookedForMe[0]
+    : bookings.length > 0
+    ? bookings[0]
+    : null;
+
+  const isBookedForMe = ticketsBookedForMe.length > 0 && activeBooking && ticketsBookedForMe.some(t => t.id === activeBooking.id);
+  const myPassenger = isBookedForMe ? activeBooking.myPassengerRecord : (activeBooking?.passengers[0] || null);
 
   const handlePnrSearch = (e) => {
     e.preventDefault();
@@ -60,7 +70,7 @@ export const PassengerDashboard = () => {
             marginBottom: '0.875rem'
           }}>
             <Sparkles size={14} color="#fde047" />
-            WELCOME, {currentUser?.name?.toUpperCase() || 'HARSHAVARDHAN S'}
+            WELCOME, {currentUser?.name?.toUpperCase() || 'PASSENGER'}
           </div>
 
           <h1 style={{ fontSize: '2.4rem', fontWeight: 900, color: '#ffffff', lineHeight: 1.2, marginBottom: '0.75rem' }}>
@@ -121,12 +131,12 @@ export const PassengerDashboard = () => {
               BOOK TICKET
             </h3>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.925rem', lineHeight: 1.5, marginBottom: '1.5rem' }}>
-              Search trains and book your journey. Select berth preferences and generate instant Sub-PNRs.
+              Search multi-route Indian railway corridors, select coach/berth preferences, and generate instant Sub-PNRs.
             </p>
           </div>
 
           <Link to="/book" className="btn btn-primary" style={{ width: '100%', justifyContent: 'space-between' }}>
-            <span>Book Ticket</span>
+            <span>Search & Book Journey</span>
             <ArrowRight size={18} />
           </Link>
         </div>
@@ -167,7 +177,7 @@ export const PassengerDashboard = () => {
             </div>
 
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.925rem', lineHeight: 1.5, marginBottom: '1.5rem' }}>
-              Verify your boarding and generate your digital boarding pass with simulated biometric verification.
+              Verify your boarding and generate your passenger-specific digital boarding pass with simulated biometric verification.
             </p>
           </div>
 
@@ -184,7 +194,8 @@ export const PassengerDashboard = () => {
           padding: '2rem',
           borderRadius: '20px',
           marginBottom: '2.5rem',
-          border: '1.5px solid var(--border-light)'
+          border: isBookedForMe ? '2px solid #93c5fd' : '1.5px solid var(--border-light)',
+          background: isBookedForMe ? 'linear-gradient(180deg, #ffffff 0%, #f8faff 100%)' : '#ffffff'
         }}>
           <div style={{
             display: 'flex',
@@ -197,13 +208,18 @@ export const PassengerDashboard = () => {
             marginBottom: '1.5rem'
           }}>
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.2rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.2rem', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700 }}>
                   Active Journey
                 </span>
                 <span className="badge badge-success">
                   CONFIRMED
                 </span>
+                {isBookedForMe && (
+                  <span className="badge badge-primary" style={{ fontSize: '0.7rem' }}>
+                    Booked for you by {activeBooking.bookedByUserName || activeBooking.bookedBy?.name}
+                  </span>
+                )}
               </div>
               <h3 style={{ fontSize: '1.35rem', color: 'var(--primary-900)', margin: 0 }}>
                 {activeBooking.trainNumber} – {activeBooking.trainName}
@@ -218,9 +234,12 @@ export const PassengerDashboard = () => {
                 <Ticket size={15} />
                 View E-Ticket
               </button>
-              <Link to="/boarding" className="btn btn-success btn-sm">
+              <Link
+                to={`/boarding?pnr=${activeBooking.mainPnr}&subPnr=${myPassenger?.subPnr || 'PA01'}`}
+                className="btn btn-success btn-sm"
+              >
                 <Fingerprint size={15} />
-                Generate Boarding Pass
+                {isBookedForMe ? `Start My Boarding (${myPassenger?.subPnr})` : 'Start Boarding'}
               </Link>
             </div>
           </div>
@@ -267,7 +286,7 @@ export const PassengerDashboard = () => {
           {/* Sub-PNRs Passenger Matrix */}
           <div>
             <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: '0.75rem', textTransform: 'uppercase' }}>
-              Passengers & Individual Sub-PNRs ({activeBooking.passengers.length})
+              {isBookedForMe ? 'Your Passenger Seat Allocation' : `Passengers & Individual Sub-PNRs (${activeBooking.passengers.length})`}
             </span>
 
             <div style={{
@@ -275,40 +294,43 @@ export const PassengerDashboard = () => {
               gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
               gap: '0.75rem'
             }}>
-              {activeBooking.passengers.map((p) => (
-                <div
-                  key={p.subPnr}
-                  style={{
-                    background: '#ffffff',
-                    border: '1px solid var(--border-medium)',
-                    borderRadius: '10px',
-                    padding: '0.75rem',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center'
-                  }}
-                >
-                  <div>
-                    <strong style={{ fontSize: '0.85rem', color: 'var(--primary-900)' }}>{p.name}</strong>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block' }}>
-                      Coach {p.coach}, Seat {p.seat} ({p.berthType})
-                    </span>
-                  </div>
+              {activeBooking.passengers.map((p) => {
+                const isCurrent = isBookedForMe && p.subPnr === myPassenger?.subPnr;
+                return (
+                  <div
+                    key={p.subPnr}
+                    style={{
+                      background: isCurrent ? '#eff6ff' : '#ffffff',
+                      border: isCurrent ? '2px solid #2563eb' : '1px solid var(--border-medium)',
+                      borderRadius: '10px',
+                      padding: '0.75rem',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center'
+                    }}
+                  >
+                    <div>
+                      <strong style={{ fontSize: '0.85rem', color: 'var(--primary-900)' }}>{p.name}</strong>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block' }}>
+                        Coach {p.coach}, Seat {p.seat} ({p.berthType})
+                      </span>
+                    </div>
 
-                  <div style={{ textAlign: 'right' }}>
-                    <span style={{
-                      display: 'block',
-                      fontFamily: 'JetBrains Mono',
-                      fontSize: '0.8rem',
-                      fontWeight: 800,
-                      color: 'var(--primary-700)'
-                    }}>
-                      {p.subPnr}
-                    </span>
-                    <StatusBadge status={p.boardingStatus} style={{ fontSize: '0.65rem' }} />
+                    <div style={{ textAlign: 'right' }}>
+                      <span style={{
+                        display: 'block',
+                        fontFamily: 'JetBrains Mono',
+                        fontSize: '0.8rem',
+                        fontWeight: 800,
+                        color: 'var(--primary-700)'
+                      }}>
+                        {p.subPnr}
+                      </span>
+                      <StatusBadge status={p.boardingStatus} style={{ fontSize: '0.65rem' }} />
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
@@ -339,7 +361,7 @@ export const PassengerDashboard = () => {
             No Active Bookings
           </h3>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', maxWidth: '420px', margin: '0 auto 1.5rem' }}>
-            You haven't booked any train tickets yet. Search available trains to reserve your seat and generate your Sub-PNR.
+            You haven't booked any train tickets yet. Search available multi-route trains to reserve your seat and generate your Sub-PNR.
           </p>
           <Link to="/book" className="btn btn-primary">
             <Plus size={16} />
