@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useLocation, Link } from 'react-router-dom';
 import { useBoardEazy } from '../context/BoardEazyContext';
 import BiometricScanner from '../components/BiometricScanner';
 import QRCodeCard from '../components/QRCodeCard';
@@ -13,21 +13,37 @@ import {
   Search,
   ArrowRight,
   Sparkles,
-  Info
+  Info,
+  Phone,
+  UserCheck
 } from 'lucide-react';
 
 export const BoardingPlatformPage = () => {
-  const { bookings, findPassengerByPnrs } = useBoardEazy();
+  const location = useLocation();
+  const { bookings, findPassengerByPnrs, updatePassengerStatus } = useBoardEazy();
 
-  // Start with completely empty inputs as requested by user
-  const [mainPnrInput, setMainPnrInput] = useState('');
-  const [subPnrInput, setSubPnrInput] = useState('');
+  const queryParams = new URLSearchParams(location.search);
+  const initialPnr = queryParams.get('pnr') || '';
+  const initialSubPnr = queryParams.get('subPnr') || '';
+
+  const [mainPnrInput, setMainPnrInput] = useState(initialPnr);
+  const [subPnrInput, setSubPnrInput] = useState(initialSubPnr);
 
   // Workflow Stages: 'search' -> 'verify_details' -> 'biometric' -> 'boarding_pass'
-  const [stage, setStage] = useState('search');
+  const [stage, setStage] = useState(initialPnr && initialSubPnr ? 'verify_details' : 'search');
   const [retrievedData, setRetrievedData] = useState(null);
   const [acceptTerms, setAcceptTerms] = useState(true);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (initialPnr && initialSubPnr) {
+      const result = findPassengerByPnrs(initialPnr.trim(), initialSubPnr.trim());
+      if (result) {
+        setRetrievedData(result);
+        setStage('verify_details');
+      }
+    }
+  }, [initialPnr, initialSubPnr, bookings]);
 
   const handleRetrieve = (e) => {
     if (e) e.preventDefault();
@@ -38,7 +54,7 @@ export const BoardingPlatformPage = () => {
       return;
     }
     if (!subPnrInput.trim()) {
-      setError('Please enter your Passenger Sub-PNR (e.g. PA01).');
+      setError('Please enter your Passenger Sub-PNR (e.g. PA01, PA02).');
       return;
     }
 
@@ -62,6 +78,16 @@ export const BoardingPlatformPage = () => {
   };
 
   const handleBiometricComplete = () => {
+    if (retrievedData) {
+      const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      // Update passenger boarding state
+      updatePassengerStatus(
+        retrievedData.booking.mainPnr,
+        retrievedData.passenger.subPnr,
+        'BOARDED',
+        timestamp
+      );
+    }
     setTimeout(() => {
       setStage('boarding_pass');
     }, 600);
@@ -97,7 +123,7 @@ export const BoardingPlatformPage = () => {
           Digital Boarding Platform
         </h1>
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
-          Enter your Main PNR and Sub-PNR to retrieve your reservation and generate your QR Boarding Pass.
+          Enter your Main PNR and individual Sub-PNR to complete biometric verification and generate your individual QR Boarding Pass.
         </p>
       </div>
 
@@ -137,7 +163,7 @@ export const BoardingPlatformPage = () => {
                   className="form-input"
                   value={subPnrInput}
                   onChange={(e) => setSubPnrInput(e.target.value)}
-                  placeholder="e.g. PA01"
+                  placeholder="e.g. PA01, PA02"
                   style={{ fontFamily: 'JetBrains Mono', fontWeight: 700, fontSize: '1.05rem' }}
                   required
                 />
@@ -169,18 +195,31 @@ export const BoardingPlatformPage = () => {
           ) : (
             <div style={{ borderTop: '1px solid var(--border-light)', paddingTop: '1rem', marginTop: '0.5rem' }}>
               <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: '0.5rem' }}>
-                Your Active Bookings in this session:
+                Your Active Bookings & Sub-PNRs in this session:
               </span>
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                 {bookings.map(b => (
-                  <button
-                    key={b.mainPnr}
-                    type="button"
-                    onClick={() => { setMainPnrInput(b.mainPnr); setSubPnrInput('PA01'); }}
-                    className="btn btn-secondary btn-sm"
-                  >
-                    PNR: {b.mainPnr} (Train {b.trainNumber})
-                  </button>
+                  <div key={b.mainPnr} style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                    {b.passengers.map(p => (
+                      <button
+                        key={p.subPnr}
+                        type="button"
+                        onClick={() => {
+                          setMainPnrInput(b.mainPnr);
+                          setSubPnrInput(p.subPnr);
+                          const res = findPassengerByPnrs(b.mainPnr, p.subPnr);
+                          if (res) {
+                            setRetrievedData(res);
+                            setStage('verify_details');
+                          }
+                        }}
+                        className="btn btn-secondary btn-sm"
+                        style={{ fontSize: '0.78rem' }}
+                      >
+                        {b.mainPnr} / {p.subPnr} ({p.name})
+                      </button>
+                    ))}
+                  </div>
                 ))}
               </div>
             </div>
@@ -201,11 +240,15 @@ export const BoardingPlatformPage = () => {
           }}>
             <div>
               <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700 }}>
-                Retrieved Passenger
+                Retrieved Passenger Identity
               </span>
               <h3 style={{ fontSize: '1.4rem', color: 'var(--primary-900)', margin: 0 }}>
                 {retrievedData.passenger.name}
               </h3>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.3rem', marginTop: '0.2rem' }}>
+                <Phone size={12} color="var(--primary-600)" />
+                Linked Mobile: {retrievedData.passenger.mobile}
+              </span>
             </div>
 
             <div style={{ textAlign: 'right' }}>
@@ -245,9 +288,18 @@ export const BoardingPlatformPage = () => {
 
             <div>
               <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', textTransform: 'uppercase', display: 'block' }}>
+                Class & Quota
+              </span>
+              <strong style={{ color: 'var(--primary-800)' }}>
+                {retrievedData.passenger.classCode || retrievedData.booking.travelClass || 'CC'} ({retrievedData.booking.quota || 'General'})
+              </strong>
+            </div>
+
+            <div>
+              <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', textTransform: 'uppercase', display: 'block' }}>
                 Coach & Seat
               </span>
-              <strong style={{ color: 'var(--primary-800)', fontSize: '1.1rem' }}>
+              <strong style={{ color: 'var(--primary-800)', fontSize: '1.05rem' }}>
                 Coach {retrievedData.passenger.coach}, Seat {retrievedData.passenger.seat} ({retrievedData.passenger.berthType})
               </strong>
             </div>
@@ -291,7 +343,7 @@ export const BoardingPlatformPage = () => {
               style={{ width: '18px', height: '18px', cursor: 'pointer' }}
             />
             <label htmlFor="termsCheckbox" style={{ fontSize: '0.875rem', color: 'var(--text-primary)', cursor: 'pointer', fontWeight: 600 }}>
-              I accept the BoardEazy Boarding Terms & Conditions for contactless digital railway check-in.
+              I confirm my passenger identity ({retrievedData.passenger.name}) and accept BoardEazy Digital Boarding verification protocols.
             </label>
           </div>
 
@@ -316,7 +368,7 @@ export const BoardingPlatformPage = () => {
             passengerName={retrievedData.passenger.name}
             subPnr={retrievedData.passenger.subPnr}
             title="Biometric Identity Verification"
-            subtitle="Place registered finger on sensor to generate your Digital Boarding Pass"
+            subtitle={`Verifying biometrics for ${retrievedData.passenger.name} (${retrievedData.passenger.subPnr})`}
             onVerificationComplete={handleBiometricComplete}
           />
 
@@ -346,7 +398,7 @@ export const BoardingPlatformPage = () => {
             fontWeight: 700
           }}>
             <ShieldCheck size={20} color="#059669" />
-            Biometric Verified: {retrievedData.passenger.name} ({retrievedData.passenger.subPnr})
+            Biometric Verified: {retrievedData.passenger.name} ({retrievedData.passenger.subPnr}) • Status: BOARDED
           </div>
 
           <QRCodeCard
@@ -357,6 +409,7 @@ export const BoardingPlatformPage = () => {
             trainName={retrievedData.booking.trainName}
             coach={retrievedData.passenger.coach}
             seat={retrievedData.passenger.seat}
+            travelClass={retrievedData.passenger.classCode || retrievedData.booking.travelClass || 'CC'}
             boardingStation={retrievedData.booking.fromStation}
             destination={retrievedData.booking.toStation}
             journeyDate={retrievedData.booking.journeyDate}
@@ -364,10 +417,13 @@ export const BoardingPlatformPage = () => {
             status="READY FOR BOARDING"
           />
 
-          <div style={{ textAlign: 'center', marginTop: '1.5rem' }}>
+          <div style={{ textAlign: 'center', marginTop: '1.5rem', display: 'flex', justifyContent: 'center', gap: '1rem' }}>
             <button onClick={handleResetSearch} className="btn btn-outline">
               Check-in Another Passenger Sub-PNR
             </button>
+            <Link to="/my-bookings" className="btn btn-secondary">
+              Go to My Bookings
+            </Link>
           </div>
         </div>
       )}

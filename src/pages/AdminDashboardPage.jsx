@@ -247,8 +247,8 @@ export const AdminDashboardPage = () => {
                     {t.number}
                   </td>
                   <td style={{ padding: '0.75rem 1rem', fontWeight: 600 }}>{t.name}</td>
-                  <td style={{ padding: '0.75rem 1rem', color: 'var(--text-secondary)' }}>{t.from} → {t.to}</td>
-                  <td style={{ padding: '0.75rem 1rem', fontSize: '0.8rem' }}>{t.departure} → {t.arrival}</td>
+                  <td style={{ padding: '0.75rem 1rem', color: 'var(--text-secondary)' }}>{t.source || t.from} → {t.destination || t.to}</td>
+                  <td style={{ padding: '0.75rem 1rem', fontSize: '0.8rem' }}>{t.departure || (t.routeStops && t.routeStops[0]?.departure) || '05:50 AM'} → {t.arrival || (t.routeStops && t.routeStops[t.routeStops.length - 1]?.arrival) || '12:20 PM'}</td>
                   <td style={{ padding: '0.75rem 1rem' }}>
                     <span className="badge badge-success" style={{ fontSize: '0.68rem' }}>
                       ONLINE (RD-Active)

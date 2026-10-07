@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Train, Clock, ArrowRight, ShieldCheck, Check, Sparkles } from 'lucide-react';
+import { Train, Clock, ArrowRight, ShieldCheck, Check, Sparkles, MapPin } from 'lucide-react';
 import StatusBadge from './StatusBadge';
 
 export const TrainCard = ({
@@ -9,16 +9,20 @@ export const TrainCard = ({
   onSelectTrain
 }) => {
   const [activeClassCode, setActiveClassCode] = useState(
-    selectedClass || (train.classes && train.classes[0]?.code) || 'CC'
+    selectedClass || (train.classes && train.classes[0]?.code) || (train.availableClasses && train.availableClasses[0]?.code) || 'CC'
   );
 
-  const activeClassObj = train.classes?.find(c => c.code === activeClassCode) || train.classes[0];
+  const classList = train.availableClasses || train.classes || [];
+  const activeClassObj = classList.find(c => c.code === activeClassCode) || classList[0];
 
   const handleClassClick = (clsCode, e) => {
     e.stopPropagation();
     setActiveClassCode(clsCode);
     if (onSelectClass) onSelectClass(clsCode);
   };
+
+  const fromLabel = train.fromStationName ? `${train.fromStationName} (${train.fromStationCode})` : (train.fromStation || train.from || 'Source');
+  const toLabel = train.toStationName ? `${train.toStationName} (${train.toStationCode})` : (train.toStation || train.to || 'Destination');
 
   return (
     <div className="card card-interactive" style={{
@@ -72,12 +76,17 @@ export const TrainCard = ({
               {train.type === 'Vande Bharat' && (
                 <span className="badge badge-ai" style={{ fontSize: '0.7rem' }}>
                   <Sparkles size={11} />
-                  SMART BIOMETRIC EXPRESS
+                  VANDE BHARAT
+                </span>
+              )}
+              {train.type === 'Rajdhani' && (
+                <span className="badge" style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', fontSize: '0.7rem' }}>
+                  TEJAS RAJDHANI
                 </span>
               )}
             </div>
             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.2rem', display: 'block' }}>
-              Runs On: {Array.isArray(train.runsOn) ? train.runsOn.join(', ') : train.runsOn} • Distance: {train.distanceKm} km
+              Runs On: {Array.isArray(train.runningDays || train.runsOn) ? (train.runningDays || train.runsOn).join(', ') : (train.runningDays || train.runsOn || 'All Days')} • Distance: {train.segmentDistance || train.distanceKm || 359} km
             </span>
           </div>
         </div>
@@ -97,13 +106,13 @@ export const TrainCard = ({
               {train.departure}
             </div>
             <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-              {train.from}
+              {train.fromStationCode || train.from || 'Source'}
             </div>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '0 0.5rem' }}>
             <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-              {train.duration}
+              {train.duration || '04h 30m'}
             </span>
             <div style={{
               display: 'flex',
@@ -124,7 +133,7 @@ export const TrainCard = ({
               {train.arrival}
             </div>
             <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-              {train.to}
+              {train.toStationCode || train.to || 'Destination'}
             </div>
           </div>
         </div>
@@ -137,9 +146,9 @@ export const TrainCard = ({
         gap: '0.875rem',
         marginBottom: '1.25rem'
       }}>
-        {train.classes?.map(cls => {
+        {classList.map(cls => {
           const isSelected = cls.code === activeClassCode;
-          const isAvail = cls.status.includes('AVAILABLE');
+          const isAvail = (cls.status || 'AVAILABLE').includes('AVAILABLE');
 
           return (
             <div
@@ -161,14 +170,14 @@ export const TrainCard = ({
                   {cls.code}
                 </span>
                 <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--primary-700)' }}>
-                  ₹{cls.fare.toLocaleString()}
+                  ₹{(cls.fare || 995).toLocaleString()}
                 </span>
               </div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
                 {cls.name}
               </div>
               <div>
-                <StatusBadge status={cls.status} />
+                <StatusBadge status={cls.status || 'AVAILABLE'} />
                 {isAvail && cls.seatsLeft > 0 && (
                   <span style={{ fontSize: '0.72rem', color: 'var(--success-green)', fontWeight: 700, marginLeft: '0.35rem' }}>
                     ({cls.seatsLeft} left)

@@ -15,55 +15,75 @@ import {
 } from 'lucide-react';
 
 export const StationGateScannerPage = () => {
-  const { updatePassengerStatus, coachPassengers } = useBoardEazy();
+  const { updatePassengerStatus, bookings } = useBoardEazy();
 
-  const [selectedSubPnr, setSelectedSubPnr] = useState('PA01');
+  // Collect all passengers from bookings or provide defaults
+  const allAvailablePassengers = [];
+  bookings.forEach(b => {
+    b.passengers.forEach(p => {
+      allAvailablePassengers.push({
+        mainPnr: b.mainPnr,
+        subPnr: p.subPnr,
+        name: p.name,
+        coach: p.coach,
+        seat: p.seat,
+        trainName: b.trainName
+      });
+    });
+  });
+
+  const passengerOptions = allAvailablePassengers.length > 0 ? allAvailablePassengers : [
+    { mainPnr: '4567891234', subPnr: 'PA01', name: 'Harshavardhan S', coach: 'C2', seat: '21', trainName: 'Vande Bharat' },
+    { mainPnr: '4567891234', subPnr: 'PA02', name: 'Meenakshi S', coach: 'C2', seat: '22', trainName: 'Vande Bharat' }
+  ];
+
+  const [selectedPassengerIdx, setSelectedPassengerIdx] = useState(0);
   const [isScanning, setIsScanning] = useState(false);
   const [scanResult, setScanResult] = useState(null);
 
-  const passengerOptions = [
-    { subPnr: 'PA01', name: 'Harshavardhan S', coach: 'C2', seat: '36', mobile: '+919176591451' },
-    { subPnr: 'PA02', name: 'Meenakshi S', coach: 'C2', seat: '37', mobile: '+919176591451' }
-  ];
+  const selectedP = passengerOptions[selectedPassengerIdx] || passengerOptions[0];
 
   const handleSimulateScan = () => {
     setIsScanning(true);
     setScanResult(null);
 
     setTimeout(() => {
-      const p = passengerOptions.find(item => item.subPnr === selectedSubPnr) || passengerOptions[0];
       const scanTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
       // Update state in context
-      updatePassengerStatus('4567891234', selectedSubPnr, 'STATION_ENTERED', scanTime);
+      updatePassengerStatus(selectedP.mainPnr, selectedP.subPnr, 'STATION_ENTERED', scanTime);
 
       // Send station entry SMS (fire-and-forget)
-      sendStationEntrySMS({
-        name: p.name,
-        subPnr: p.subPnr,
-        mobile: p.mobile || '+919176591451', // fallback for demo hardcoded passengers
-        coach: p.coach,
-        seat: p.seat,
-        gateId: 'GATE-MAS-NORTH-04',
-        scanTime,
-      }).then(result => {
-        if (!result.success) {
-          console.warn('[SMS] Station entry SMS failed:', result.error);
-        }
-      });
+      const booking = bookings.find(b => b.mainPnr === selectedP.mainPnr);
+      const passenger = booking?.passengers.find(p => p.subPnr === selectedP.subPnr);
+      if (passenger?.mobile) {
+        sendStationEntrySMS({
+          name: selectedP.name,
+          subPnr: selectedP.subPnr,
+          mobile: passenger.mobile,
+          coach: selectedP.coach,
+          seat: selectedP.seat.toString(),
+          gateId: 'GATE-MAS-NORTH-04',
+          scanTime,
+        }).then(result => {
+          if (!result.success) {
+            console.warn('[SMS] Station entry SMS failed:', result.error);
+          }
+        });
+      }
 
       setScanResult({
-        name: p.name,
-        subPnr: p.subPnr,
-        mainPnr: '4567891234',
-        coach: p.coach,
-        seat: p.seat,
+        name: selectedP.name,
+        subPnr: selectedP.subPnr,
+        mainPnr: selectedP.mainPnr,
+        coach: selectedP.coach,
+        seat: selectedP.seat,
         status: 'Station Entry Verified',
         scanTime,
         gateId: 'GATE-MAS-NORTH-04'
       });
       setIsScanning(false);
-    }, 1400);
+    }, 1200);
   };
 
   return (
@@ -126,12 +146,12 @@ export const StationGateScannerPage = () => {
           <label className="form-label">Select Passenger Boarding Pass to Scan:</label>
           <select
             className="form-select"
-            value={selectedSubPnr}
-            onChange={(e) => setSelectedSubPnr(e.target.value)}
+            value={selectedPassengerIdx}
+            onChange={(e) => setSelectedPassengerIdx(parseInt(e.target.value, 10))}
           >
-            {passengerOptions.map(p => (
-              <option key={p.subPnr} value={p.subPnr}>
-                {p.name} ({p.subPnr} • Coach {p.coach} - Seat {p.seat})
+            {passengerOptions.map((p, idx) => (
+              <option key={idx} value={idx}>
+                {p.name} ({p.subPnr} • PNR: {p.mainPnr} • Coach {p.coach} - Seat {p.seat})
               </option>
             ))}
           </select>
@@ -249,7 +269,7 @@ export const StationGateScannerPage = () => {
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
-              <Link to="/train-gate" className="btn btn-success btn-sm">
+              <Link to="/tte/train-gate" className="btn btn-success btn-sm">
                 Next: Proceed to Train Gate Biometric
                 <ArrowRight size={14} />
               </Link>

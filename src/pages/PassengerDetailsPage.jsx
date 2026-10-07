@@ -1,20 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useBoardEazy } from '../context/BoardEazyContext';
 import {
-  Train,
-  User,
+  ArrowRight,
   Plus,
   Trash2,
-  ArrowRight,
-  ShieldCheck,
   Info,
-  Calendar,
-  MapPin,
   Sparkles,
+  Phone,
   Mail,
-  Phone
+  LayoutGrid,
+  AlertCircle,
+  Clock
 } from 'lucide-react';
+import { normalizeMobile } from '../data/seatLayoutEngine';
 
 export const PassengerDetailsPage = () => {
   const location = useLocation();
@@ -25,16 +24,36 @@ export const PassengerDetailsPage = () => {
   const train = stateData.train || {
     number: '20607',
     name: 'Chennai – Mysuru Vande Bharat Express',
+    type: 'Vande Bharat',
     fromStation: 'Chennai Central (MAS)',
     toStation: 'Bengaluru KSR (SBC)',
+    fromStationCode: 'MAS',
+    toStationCode: 'SBC',
     departure: '05:50 AM',
     arrival: '10:20 AM',
-    classes: [{ code: '3A', fare: 1250 }]
+    classes: [{ code: 'CC', fare: 995 }, { code: 'EC', fare: 1885 }],
+    coaches: [
+      { coachNumber: 'C1', coachType: 'CC', classCode: 'CC', capacity: 78, layoutType: 'CHAIR_CAR' },
+      { coachNumber: 'C2', coachType: 'CC', classCode: 'CC', capacity: 78, layoutType: 'CHAIR_CAR' },
+      { coachNumber: 'E1', coachType: 'EC', classCode: 'EC', capacity: 52, layoutType: 'EXEC_CHAIR_CAR' }
+    ]
   };
-  const travelClass = stateData.travelClass || '3A';
+
+  const travelClass = stateData.travelClass || 'CC';
   const quota = stateData.quota || 'General';
   const journeyDate = stateData.journeyDate || '25 September 2026';
+  const fromStation = stateData.fromStation || 'Chennai Central (MAS)';
+  const toStation = stateData.toStation || 'Bengaluru KSR (SBC)';
 
+  // Find valid coaches on this train for the selected class
+  const availableCoaches = useMemo(() => {
+    const list = train.coaches?.filter(c => c.classCode === travelClass) || [];
+    return list.length > 0 ? list : [{ coachNumber: 'C2', coachType: travelClass, classCode: travelClass, capacity: 78, layoutType: 'CHAIR_CAR' }];
+  }, [train, travelClass]);
+
+  const [selectedCoach, setSelectedCoach] = useState(availableCoaches[0]?.coachNumber || 'C2');
+
+  // Initial Passengers List (Berth Preference selectable, seat allocated only post-booking)
   const [passengers, setPassengers] = useState([
     {
       name: currentUser?.name || 'Harshavardhan S',
@@ -46,14 +65,20 @@ export const PassengerDetailsPage = () => {
     }
   ]);
 
+  const [contactMobile, setContactMobile] = useState(currentUser?.phone || '+91 98765 43210');
+  const [contactEmail, setContactEmail] = useState(currentUser?.email || 'harshavardhan@gmail.com');
+  const [error, setError] = useState('');
+
   const handleAddPassenger = () => {
     if (passengers.length >= 6) {
       alert('Maximum 6 passengers allowed per booking.');
       return;
     }
-    const defaultName = passengers.length === 1 ? 'Meenakshi S' : '';
-    const defaultGender = passengers.length === 1 ? 'Female' : 'Male';
-    const defaultEmail = passengers.length === 1 ? 'meenakshi@gmail.com' : 'passenger@gmail.com';
+    const idx = passengers.length;
+    const defaultName = idx === 1 ? 'Meenakshi S' : idx === 2 ? 'Ravi Kumar' : '';
+    const defaultGender = idx === 1 ? 'Female' : 'Male';
+    const defaultMobile = idx === 1 ? '+91 98765 00001' : idx === 2 ? '+91 98765 00002' : '+91 98765 43210';
+    const defaultEmail = idx === 1 ? 'meenakshi@gmail.com' : idx === 2 ? 'ravi@gmail.com' : 'passenger@gmail.com';
 
     setPassengers([
       ...passengers,
@@ -62,7 +87,7 @@ export const PassengerDetailsPage = () => {
         age: 21,
         gender: defaultGender,
         berthPreference: 'Aisle',
-        mobile: '+91 98765 43211',
+        mobile: defaultMobile,
         email: defaultEmail
       }
     ]);
@@ -70,7 +95,7 @@ export const PassengerDetailsPage = () => {
 
   const handleRemovePassenger = (index) => {
     if (passengers.length === 1) {
-      alert('At least one passenger is required.');
+      alert('At least 1 passenger is required.');
       return;
     }
     setPassengers(passengers.filter((_, i) => i !== index));
@@ -84,9 +109,21 @@ export const PassengerDetailsPage = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    for (let p of passengers) {
-      if (!p.name || !p.age || !p.mobile || !p.email) {
-        alert('Please complete all passenger fields (Name, Age, Gender, Berth Preference, Mobile No, and Email ID).');
+    setError('');
+
+    // Validation
+    for (let i = 0; i < passengers.length; i++) {
+      const p = passengers[i];
+      if (!p.name.trim()) {
+        setError(`Please enter passenger name for Passenger #${i + 1}.`);
+        return;
+      }
+      if (!p.age || p.age < 1 || p.age > 120) {
+        setError(`Please enter a valid age for Passenger #${i + 1}.`);
+        return;
+      }
+      if (!p.mobile || p.mobile.replace(/\D/g, '').length < 10) {
+        setError(`Please enter a valid 10-digit mobile number for Passenger #${i + 1} (${p.name || 'Passenger'}).`);
         return;
       }
     }
@@ -97,115 +134,182 @@ export const PassengerDetailsPage = () => {
         travelClass,
         quota,
         journeyDate,
-        passengers
+        fromStation,
+        toStation,
+        selectedCoach,
+        passengers: passengers.map((p, idx) => ({
+          ...p,
+          subPnrPreview: `PA0${idx + 1}`,
+          coach: selectedCoach,
+          normalizedMobile: normalizeMobile(p.mobile)
+        })),
+        contactMobile,
+        contactEmail
       }
     });
   };
+
+  const baseFare = train.classes?.find(c => c.code === travelClass)?.fare || 995;
+  const estimatedTotal = baseFare * passengers.length + (40 + 45) * passengers.length;
 
   return (
     <div className="container" style={{ paddingTop: '2rem', paddingBottom: '3rem', maxWidth: '880px' }}>
       {/* Title */}
       <div style={{ marginBottom: '1.5rem' }}>
-        <h1 style={{ fontSize: '1.85rem', color: 'var(--primary-900)' }}>
-          Passenger Details & Sub-PNR Allocation
+        <div style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '0.4rem',
+          background: 'var(--primary-50)',
+          color: 'var(--primary-700)',
+          padding: '0.35rem 0.85rem',
+          borderRadius: '999px',
+          fontSize: '0.78rem',
+          fontWeight: 700,
+          marginBottom: '0.5rem'
+        }}>
+          <Sparkles size={14} />
+          STEP 2 OF 4: PASSENGER & COACH CONFIGURATION
+        </div>
+        <h1 style={{ fontSize: '1.85rem', color: 'var(--primary-900)', margin: 0 }}>
+          Passenger Details & Sub-PNR Configuration
         </h1>
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.925rem' }}>
-          Enter passenger information. Each traveler will be assigned an individual Sub-PNR for contactless digital boarding.
+          Assign individual Sub-PNRs with mobile-based account linking and choose your coach/berth preference.
         </p>
       </div>
 
-      {/* Train summary header */}
-      <div style={{
-        background: 'linear-gradient(135deg, #0a2d59 0%, #1565c0 100%)',
-        color: '#ffffff',
-        borderRadius: '16px',
+      {/* Train & Journey Snapshot Card */}
+      <div className="card" style={{
         padding: '1.25rem 1.5rem',
-        marginBottom: '1.75rem',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: '1rem'
+        borderRadius: '16px',
+        marginBottom: '1.5rem',
+        background: 'var(--primary-25)',
+        border: '1px solid var(--primary-100)'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem' }}>
-          <div style={{
-            background: 'rgba(255, 255, 255, 0.15)',
-            padding: '0.6rem',
-            borderRadius: '10px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}>
-            <Train size={22} color="#ffffff" />
-          </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <span style={{ fontFamily: 'JetBrains Mono', fontWeight: 800, background: 'rgba(255, 255, 255, 0.2)', padding: '0.1rem 0.4rem', borderRadius: '4px', fontSize: '0.85rem' }}>
-                {train.number}
-              </span>
-              <h3 style={{ color: '#ffffff', fontSize: '1.15rem', margin: 0 }}>
-                {train.name}
-              </h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <strong style={{ fontSize: '1.15rem', color: 'var(--primary-900)' }}>
+                {train.number} – {train.name}
+              </strong>
+              <span className="badge badge-primary">{travelClass} Class</span>
+              <span className="badge badge-secondary">{quota} Quota</span>
             </div>
-            <span style={{ fontSize: '0.8rem', color: '#90caf9', display: 'block', marginTop: '0.2rem' }}>
-              {journeyDate} • {train.fromStation || 'MAS'} → {train.toStation || 'SBC'}
+            <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.2rem', display: 'block' }}>
+              {journeyDate} • Dep: {train.departure} ({fromStation}) ➔ Arr: {train.arrival} ({toStation})
+            </span>
+          </div>
+
+          <div style={{ textAlign: 'right' }}>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block' }}>Estimated Fare</span>
+            <span style={{ fontSize: '1.25rem', fontWeight: 900, color: 'var(--primary-800)' }}>
+              ₹{estimatedTotal.toLocaleString()}
             </span>
           </div>
         </div>
-
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-          <span style={{ background: 'rgba(255, 255, 255, 0.15)', padding: '0.25rem 0.6rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 700 }}>
-            Class: {travelClass}
-          </span>
-          <span style={{ background: 'rgba(255, 255, 255, 0.15)', padding: '0.25rem 0.6rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 700 }}>
-            Quota: {quota}
-          </span>
-        </div>
       </div>
 
-      {/* Sub-PNR Info Callout */}
-      <div style={{
-        background: 'var(--primary-50)',
-        border: '1.5px solid var(--primary-200)',
-        borderRadius: '14px',
-        padding: '1rem 1.25rem',
-        marginBottom: '2rem',
-        display: 'flex',
-        alignItems: 'flex-start',
-        gap: '0.75rem'
+      {/* Coach Selection & Allocation Notice */}
+      <div className="card" style={{
+        padding: '1.5rem',
+        borderRadius: '16px',
+        marginBottom: '1.5rem',
+        border: '1.5px solid var(--border-light)',
+        background: '#ffffff'
       }}>
-        <Info size={22} color="var(--primary-600)" style={{ flexShrink: 0, marginTop: '2px' }} />
-        <div>
-          <strong style={{ color: 'var(--primary-900)', fontSize: '0.9rem', display: 'block' }}>
-            Dual-Tier Sub-PNR Assignment:
-          </strong>
-          <p style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', margin: '0.25rem 0 0.5rem' }}>
-            Each passenger receives an individual Sub-PNR (e.g. <code>PA01 - Harshavardhan S</code>, <code>PA02 - Meenakshi S</code>) under the Main Booking PNR.
-          </p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+          <div>
+            <h3 style={{ fontSize: '1.15rem', color: 'var(--primary-900)', margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <LayoutGrid size={18} color="var(--primary-600)" />
+              Coach & Berth Preference
+            </h3>
+            <span style={{ fontSize: '0.825rem', color: 'var(--text-secondary)' }}>
+              Select preferred coach for class <strong>{travelClass}</strong>
+            </span>
+          </div>
 
-          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-            {passengers.map((p, idx) => (
-              <span
-                key={idx}
-                style={{
-                  background: '#ffffff',
-                  border: '1px solid var(--primary-300)',
-                  borderRadius: '6px',
-                  padding: '0.2rem 0.5rem',
-                  fontSize: '0.75rem',
-                  fontWeight: 700,
-                  color: 'var(--primary-800)',
-                  fontFamily: 'JetBrains Mono'
-                }}
-              >
-                PA0{idx + 1} – {p.name || `Passenger ${idx + 1}`}
-              </span>
-            ))}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <label style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--primary-900)' }}>Preferred Coach:</label>
+            <select
+              className="form-select"
+              value={selectedCoach}
+              onChange={(e) => setSelectedCoach(e.target.value)}
+              style={{ width: '150px', fontWeight: 700 }}
+            >
+              {availableCoaches.map(c => (
+                <option key={c.coachNumber} value={c.coachNumber}>
+                  Coach {c.coachNumber} ({c.capacity} seats)
+                </option>
+              ))}
+            </select>
           </div>
         </div>
+
+        {/* Seat Allocation Policy Note */}
+        <div style={{
+          marginTop: '1rem',
+          background: 'var(--bg-subtle)',
+          padding: '0.75rem 1rem',
+          borderRadius: '10px',
+          border: '1px solid var(--border-light)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.5rem',
+          fontSize: '0.825rem',
+          color: 'var(--text-secondary)'
+        }}>
+          <Clock size={16} color="var(--primary-600)" style={{ flexShrink: 0 }} />
+          <span>
+            <strong>Note on Seat Allocation:</strong> In accordance with Indian Railways reservation rules, exact seat and berth numbers will be allocated automatically upon booking confirmation based on availability and your chosen preferences.
+          </span>
+        </div>
       </div>
 
-      {/* Passenger Input Cards */}
+      {/* Passenger Mobile Linking Notice Banner */}
+      <div style={{
+        background: '#eff6ff',
+        border: '1.5px solid #bfdbfe',
+        borderRadius: '14px',
+        padding: '1rem 1.25rem',
+        marginBottom: '1.5rem',
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: '0.75rem',
+        fontSize: '0.85rem',
+        color: '#1e3a8a'
+      }}>
+        <Info size={20} color="#2563eb" style={{ flexShrink: 0, marginTop: '0.1rem' }} />
+        <div>
+          <strong style={{ display: 'block', marginBottom: '0.2rem' }}>
+            📱 Passenger Identity & Normalized Mobile Number Linking
+          </strong>
+          <span>
+            Each passenger listed below will receive an individual <strong>Sub-PNR (e.g. PA01, PA02)</strong>. Entering their unique mobile number enables them to log into their own BoardEazy account, view this journey under <em>"Tickets Booked for Me"</em>, and complete biometric gate boarding independently.
+          </span>
+        </div>
+      </div>
+
+      {error && (
+        <div style={{
+          background: 'var(--danger-red-light)',
+          color: 'var(--danger-red)',
+          padding: '0.75rem 1rem',
+          borderRadius: '12px',
+          border: '1px solid #fecaca',
+          marginBottom: '1.5rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.5rem',
+          fontWeight: 700,
+          fontSize: '0.875rem'
+        }}>
+          <AlertCircle size={18} />
+          {error}
+        </div>
+      )}
+
+      {/* Main Passengers Entry Form */}
       <form onSubmit={handleSubmit}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginBottom: '2rem' }}>
           {passengers.map((passenger, index) => (
@@ -215,18 +319,21 @@ export const PassengerDetailsPage = () => {
               style={{
                 padding: '1.5rem',
                 borderRadius: '16px',
-                border: '1.5px solid var(--border-light)'
+                border: '1.5px solid var(--border-light)',
+                background: '#ffffff',
+                position: 'relative'
               }}
             >
+              {/* Card Header */}
               <div style={{
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
                 borderBottom: '1px solid var(--border-light)',
                 paddingBottom: '0.75rem',
-                marginBottom: '1rem'
+                marginBottom: '1.25rem'
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                   <div style={{
                     width: '32px',
                     height: '32px',
@@ -241,74 +348,75 @@ export const PassengerDetailsPage = () => {
                   }}>
                     {index + 1}
                   </div>
-                  <div>
-                    <h4 style={{ fontSize: '1.05rem', color: 'var(--primary-900)', margin: 0 }}>
-                      Passenger {index + 1} Details
-                    </h4>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--primary-600)', fontFamily: 'JetBrains Mono', fontWeight: 700 }}>
-                      Sub-PNR: PA0{index + 1}
-                    </span>
-                  </div>
+                  <h3 style={{ fontSize: '1.1rem', color: 'var(--primary-900)', margin: 0 }}>
+                    Passenger #{index + 1}
+                  </h3>
+                  <span style={{
+                    fontFamily: 'JetBrains Mono',
+                    background: 'var(--primary-50)',
+                    color: 'var(--primary-700)',
+                    border: '1px solid var(--primary-200)',
+                    padding: '0.15rem 0.5rem',
+                    borderRadius: '6px',
+                    fontSize: '0.75rem',
+                    fontWeight: 800
+                  }}>
+                    Sub-PNR: PA0{index + 1}
+                  </span>
                 </div>
 
-                {passengers.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => handleRemovePassenger(index)}
-                    style={{
-                      background: 'transparent',
-                      border: 'none',
-                      color: 'var(--danger-red)',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.3rem',
-                      fontSize: '0.8rem',
-                      fontWeight: 600
-                    }}
-                  >
-                    <Trash2 size={15} />
-                    Remove
-                  </button>
-                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
+                    Coach {selectedCoach} • Seat allocated on booking
+                  </span>
+                  {passengers.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemovePassenger(index)}
+                      className="btn btn-danger btn-icon btn-sm"
+                      title="Remove Passenger"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  )}
+                </div>
               </div>
 
-              {/* Form Fields: Name, Age, Gender, Berth Preference, Mobile No, Gmail */}
+              {/* Form Fields Grid */}
               <div style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
                 gap: '1rem'
               }}>
-                {/* 1. Name */}
-                <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                  <label className="form-label">Passenger Full Name</label>
+                {/* Full Name */}
+                <div style={{ gridColumn: 'span 2' }}>
+                  <label className="form-label">Full Name (As on Govt ID)</label>
                   <input
                     type="text"
                     className="form-input"
                     value={passenger.name}
                     onChange={(e) => handlePassengerChange(index, 'name', e.target.value)}
-                    placeholder="e.g. Harshavardhan S"
+                    placeholder="e.g. Harshavardhan S / Meenakshi S"
                     required
                   />
                 </div>
 
-                {/* 2. Age */}
-                <div className="form-group">
+                {/* Age */}
+                <div>
                   <label className="form-label">Age</label>
                   <input
                     type="number"
-                    min="1"
-                    max="120"
                     className="form-input"
                     value={passenger.age}
-                    onChange={(e) => handlePassengerChange(index, 'age', e.target.value)}
-                    placeholder="e.g. 22"
+                    onChange={(e) => handlePassengerChange(index, 'age', parseInt(e.target.value, 10))}
+                    min="1"
+                    max="120"
                     required
                   />
                 </div>
 
-                {/* 3. Gender */}
-                <div className="form-group">
+                {/* Gender */}
+                <div>
                   <label className="form-label">Gender</label>
                   <select
                     className="form-select"
@@ -321,27 +429,12 @@ export const PassengerDetailsPage = () => {
                   </select>
                 </div>
 
-                {/* 4. Berth Preference */}
-                <div className="form-group">
-                  <label className="form-label">Berth Preference</label>
-                  <select
-                    className="form-select"
-                    value={passenger.berthPreference}
-                    onChange={(e) => handlePassengerChange(index, 'berthPreference', e.target.value)}
-                  >
-                    <option value="Window">Window Seat</option>
-                    <option value="Aisle">Aisle Seat</option>
-                    <option value="Lower">Lower Berth</option>
-                    <option value="Middle">Middle Berth</option>
-                    <option value="Upper">Upper Berth</option>
-                    <option value="Side Lower">Side Lower</option>
-                    <option value="Side Upper">Side Upper</option>
-                  </select>
-                </div>
-
-                {/* 5. Mobile Number */}
-                <div className="form-group">
-                  <label className="form-label">Mobile Number</label>
+                {/* Mobile Number (Key for Cross-Account Linking) */}
+                <div>
+                  <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <Phone size={13} color="var(--primary-600)" />
+                    Mobile Number (For Linking)
+                  </label>
                   <input
                     type="tel"
                     className="form-input"
@@ -352,42 +445,90 @@ export const PassengerDetailsPage = () => {
                   />
                 </div>
 
-                {/* 6. Gmail / Email */}
-                <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                  <label className="form-label">Gmail / Email ID</label>
+                {/* Email Address */}
+                <div>
+                  <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <Mail size={13} color="var(--primary-600)" />
+                    Email Address
+                  </label>
                   <input
                     type="email"
                     className="form-input"
                     value={passenger.email}
                     onChange={(e) => handlePassengerChange(index, 'email', e.target.value)}
-                    placeholder="e.g. harshavardhan@gmail.com"
-                    required
+                    placeholder="passenger@gmail.com"
                   />
+                </div>
+
+                {/* Berth Preference */}
+                <div>
+                  <label className="form-label">Berth / Seat Preference</label>
+                  <select
+                    className="form-select"
+                    value={passenger.berthPreference}
+                    onChange={(e) => handlePassengerChange(index, 'berthPreference', e.target.value)}
+                  >
+                    <option value="Window">Window Seat</option>
+                    <option value="Aisle">Aisle Seat</option>
+                    <option value="Lower Berth">Lower Berth</option>
+                    <option value="Middle Berth">Middle Berth</option>
+                    <option value="Upper Berth">Upper Berth</option>
+                    <option value="Side Lower">Side Lower</option>
+                    <option value="Side Upper">Side Upper</option>
+                  </select>
+                </div>
+
+                {/* Allocation Status Indicator */}
+                <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>
+                    Seat Allocation
+                  </span>
+                  <div style={{
+                    fontSize: '0.825rem',
+                    fontWeight: 600,
+                    color: 'var(--primary-800)',
+                    background: 'var(--primary-50)',
+                    padding: '0.5rem 0.75rem',
+                    borderRadius: '8px',
+                    border: '1px solid var(--primary-200)',
+                    marginTop: '0.25rem'
+                  }}>
+                    Assigned upon confirmation
+                  </div>
                 </div>
               </div>
             </div>
           ))}
         </div>
 
-        {/* Action Controls */}
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '1rem'
-        }}>
+        {/* Add Passenger Button */}
+        {passengers.length < 6 && (
           <button
             type="button"
             onClick={handleAddPassenger}
-            className="btn btn-outline"
+            className="btn btn-secondary"
+            style={{ width: '100%', marginBottom: '2rem', border: '1.5px dashed var(--border-medium)' }}
           >
-            <Plus size={16} />
-            Add Another Passenger (e.g. Meenakshi S)
+            <Plus size={18} />
+            Add Another Co-Passenger (Up to 6)
           </button>
+        )}
 
-          <button type="submit" className="btn btn-primary btn-lg">
-            <span>Proceed to Review & Payment</span>
+        {/* Continue to Review CTA */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
+          <button
+            type="button"
+            onClick={() => navigate('/book')}
+            className="btn btn-secondary"
+          >
+            Back to Trains
+          </button>
+          <button
+            type="submit"
+            className="btn btn-primary btn-lg"
+            style={{ minWidth: '220px' }}
+          >
+            Proceed to Review & Pay
             <ArrowRight size={18} />
           </button>
         </div>

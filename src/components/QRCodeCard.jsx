@@ -10,6 +10,7 @@ export const QRCodeCard = ({
   trainName = 'Chennai – Mysuru Vande Bharat Express',
   coach = 'C2',
   seat = '36',
+  travelClass = 'CC',
   boardingStation = 'Chennai Central (MAS)',
   destination = 'Bengaluru KSR (SBC)',
   journeyDate = '25 September 2026',
@@ -23,6 +24,7 @@ export const QRCodeCard = ({
     name: passengerName,
     coach,
     seat,
+    travelClass,
     train: trainNumber,
     valid: true,
     token: `BEZ-${subPnr}-${mainPnr.slice(-4)}-VERIFIED`
@@ -170,8 +172,8 @@ export const QRCodeCard = ({
             <span style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 600 }}>
               Class
             </span>
-            <div style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-primary)', marginTop: '0.15rem' }}>
-              3A / CC
+            <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--primary-700)', fontFamily: 'Plus Jakarta Sans', marginTop: '0.15rem' }}>
+              {travelClass}
             </div>
           </div>
         </div>

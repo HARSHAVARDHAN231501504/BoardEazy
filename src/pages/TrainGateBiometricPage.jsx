@@ -16,23 +16,39 @@ import {
 } from 'lucide-react';
 
 export const TrainGateBiometricPage = () => {
-  const { updatePassengerStatus, coachPassengers } = useBoardEazy();
+  const { updatePassengerStatus, bookings } = useBoardEazy();
 
-  const [selectedSubPnr, setSelectedSubPnr] = useState('PA01');
-  const [boardedRecord, setBoardedRecord] = useState(null);
+  // Extract all dynamic passengers from active bookings
+  const allPassengers = [];
+  bookings.forEach(b => {
+    b.passengers.forEach(p => {
+      allPassengers.push({
+        mainPnr: b.mainPnr,
+        subPnr: p.subPnr,
+        name: p.name,
+        coach: p.coach,
+        seat: p.seat,
+        trainNumber: b.trainNumber,
+        trainName: b.trainName
+      });
+    });
+  });
 
-  const passengerList = [
-    { subPnr: 'PA01', name: 'Harshavardhan S', coach: 'C2', seat: '36', mobile: '+919176591451' },
-    { subPnr: 'PA02', name: 'Meenakshi S', coach: 'C2', seat: '37', mobile: '+919176591451' }
+  const passengerList = allPassengers.length > 0 ? allPassengers : [
+    { mainPnr: '4567891234', subPnr: 'PA01', name: 'Harshavardhan S', coach: 'C2', seat: '21', trainNumber: '20607', trainName: 'Vande Bharat' },
+    { mainPnr: '4567891234', subPnr: 'PA02', name: 'Meenakshi S', coach: 'C2', seat: '22', trainNumber: '20607', trainName: 'Vande Bharat' }
   ];
 
-  const activeP = passengerList.find(p => p.subPnr === selectedSubPnr) || passengerList[0];
+  const [selectedIdx, setSelectedIdx] = useState(0);
+  const [boardedRecord, setBoardedRecord] = useState(null);
 
-  const handleBiometricVerificationSuccess = (scanData) => {
+  const activeP = passengerList[selectedIdx] || passengerList[0];
+
+  const handleBiometricVerificationSuccess = () => {
     const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    // Update global state
-    updatePassengerStatus('4567891234', activeP.subPnr, 'BOARDED', timestamp);
+    // Update global state in context
+    updatePassengerStatus(activeP.mainPnr, activeP.subPnr, 'BOARDED', timestamp);
 
     setBoardedRecord({
       name: activeP.name,
@@ -41,23 +57,27 @@ export const TrainGateBiometricPage = () => {
       seat: activeP.seat,
       timestamp,
       status: 'BOARDED',
-      gateLocation: 'Coach C2 Automated Sliding Door (MAS Platform 1)'
+      gateLocation: `Coach ${activeP.coach} Automated Biometric Sliding Door`
     });
 
     // Send boarded SMS (fire-and-forget)
-    sendBoardedSMS({
-      name: activeP.name,
-      subPnr: activeP.subPnr,
-      mobile: activeP.mobile || '+919176591451',
-      coach: activeP.coach,
-      seat: activeP.seat,
-      trainName: 'Chennai – Mysuru Vande Bharat (20607)',
-      scanTime: timestamp,
-    }).then(result => {
-      if (!result.success) {
-        console.warn('[SMS] Boarded SMS failed:', result.error);
-      }
-    });
+    const booking = bookings.find(b => b.mainPnr === activeP.mainPnr);
+    const passenger = booking?.passengers.find(p => p.subPnr === activeP.subPnr);
+    if (passenger?.mobile) {
+      sendBoardedSMS({
+        name: activeP.name,
+        subPnr: activeP.subPnr,
+        mobile: passenger.mobile,
+        coach: activeP.coach,
+        seat: activeP.seat.toString(),
+        trainName: activeP.trainName || 'Vande Bharat Express',
+        scanTime: timestamp,
+      }).then(result => {
+        if (!result.success) {
+          console.warn('[SMS] Boarded SMS failed:', result.error);
+        }
+      });
+    }
   };
 
   return (
@@ -107,17 +127,17 @@ export const TrainGateBiometricPage = () => {
             </div>
             <div>
               <strong style={{ fontSize: '1rem', color: 'var(--primary-900)', display: 'block' }}>
-                Train 20607 — Chennai – Mysuru Vande Bharat
+                Train {activeP.trainNumber} — {activeP.trainName}
               </strong>
               <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                Coach C2 Entry Door Sensor (Reader RD-C2-DOOR-01)
+                Coach {activeP.coach} Entry Door Sensor (Biometric Reader RD-{activeP.coach}-01)
               </span>
             </div>
           </div>
 
           <div style={{ textAlign: 'right' }}>
             <span style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', display: 'block' }}>
-              Selected Passenger
+              Passenger at Gate
             </span>
             <span style={{ fontWeight: 800, color: 'var(--primary-700)', fontFamily: 'JetBrains Mono' }}>
               {activeP.subPnr} ({activeP.name})
@@ -128,23 +148,25 @@ export const TrainGateBiometricPage = () => {
         {/* Passenger selection tabs */}
         <div style={{ marginBottom: '1.5rem' }}>
           <label className="form-label">Select Passenger at Coach Door:</label>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
-            {passengerList.map(p => (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.5rem' }}>
+            {passengerList.map((p, idx) => (
               <button
-                key={p.subPnr}
+                key={idx}
                 type="button"
-                onClick={() => { setSelectedSubPnr(p.subPnr); setBoardedRecord(null); }}
+                onClick={() => { setSelectedIdx(idx); setBoardedRecord(null); }}
                 style={{
-                  background: selectedSubPnr === p.subPnr ? 'var(--primary-50)' : '#ffffff',
-                  border: selectedSubPnr === p.subPnr ? '2px solid var(--primary-500)' : '1px solid var(--border-medium)',
-                  padding: '0.6rem 0.4rem',
+                  background: selectedIdx === idx ? 'var(--primary-50)' : '#ffffff',
+                  border: selectedIdx === idx ? '2px solid var(--primary-500)' : '1px solid var(--border-medium)',
+                  padding: '0.6rem 0.5rem',
                   borderRadius: '10px',
                   cursor: 'pointer',
                   textAlign: 'center'
                 }}
               >
-                <strong style={{ fontSize: '0.8rem', color: 'var(--primary-900)', display: 'block' }}>{p.name}</strong>
-                <span style={{ fontSize: '0.7rem', color: 'var(--primary-600)', fontFamily: 'JetBrains Mono' }}>{p.subPnr} (Seat {p.seat})</span>
+                <strong style={{ fontSize: '0.85rem', color: 'var(--primary-900)', display: 'block' }}>{p.name}</strong>
+                <span style={{ fontSize: '0.72rem', color: 'var(--primary-600)', fontFamily: 'JetBrains Mono' }}>
+                  {p.subPnr} (Coach {p.coach}-{p.seat})
+                </span>
               </button>
             ))}
           </div>
@@ -182,11 +204,11 @@ export const TrainGateBiometricPage = () => {
             </div>
 
             <p style={{ fontSize: '0.85rem', color: '#065f46', marginBottom: '1.25rem' }}>
-              Passenger <strong>{boardedRecord.name} ({boardedRecord.subPnr})</strong> has successfully boarded <strong>Coach {boardedRecord.coach}, Seat {boardedRecord.seat}</strong>. Live occupancy counts in the TTE monitor have updated immediately.
+              Passenger <strong>{boardedRecord.name} ({boardedRecord.subPnr})</strong> has successfully verified biometric entry for <strong>Coach {boardedRecord.coach}, Seat {boardedRecord.seat}</strong>.
             </p>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
-              <Link to="/tte-dashboard" className="btn btn-primary">
+              <Link to="/tte/dashboard" className="btn btn-primary">
                 View Live TTE Monitor
                 <ArrowRight size={16} />
               </Link>

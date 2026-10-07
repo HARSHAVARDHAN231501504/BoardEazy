@@ -178,7 +178,7 @@ export const PNRStatusPage = () => {
 
             <div>
               <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', textTransform: 'uppercase', display: 'block' }}>Class & Quota</span>
-              <strong style={{ color: 'var(--primary-800)' }}>{searchResult.travelClass || '3A'} ({searchResult.quota || 'General'})</strong>
+              <strong style={{ color: 'var(--primary-800)' }}>{searchResult.travelClass || searchResult.passengers?.[0]?.classCode || 'CC'} ({searchResult.quota || 'General'})</strong>
             </div>
           </div>
 
