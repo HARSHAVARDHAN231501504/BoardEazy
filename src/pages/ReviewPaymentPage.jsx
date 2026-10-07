@@ -70,6 +70,7 @@ export const ReviewPaymentPage = () => {
       setIsProcessing(false);
 
       // Send booking confirmation SMS to each passenger (fire-and-forget)
+      console.log('[BoardEazy] Sending booking confirmation SMS...', newBooking);
       sendBookingConfirmationSMS({
         pnr: newBooking.mainPnr,
         trainName: newBooking.trainName,
@@ -81,8 +82,8 @@ export const ReviewPaymentPage = () => {
           name: p.name,
           subPnr: p.subPnr,
           mobile: p.mobile,
-          coach: p.coach,
-          seat: p.seat,
+          coach: p.coach || 'C1',
+          seat: p.seat ? p.seat.toString() : '21',
         })),
         totalFare: newBooking.fareSummary.total,
       }).then(result => {

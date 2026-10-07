@@ -84,12 +84,12 @@ export const Footer = () => {
 
           {/* Col 3: Demo Disclaimer */}
           <div>
-            <h4 style={{ color: '#ffffff', fontSize: '0.95rem', marginBottom: '1rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            {/* <h4 style={{ color: '#ffffff', fontSize: '0.95rem', marginBottom: '1rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               Simulation Compliance
             </h4>
             <p style={{ fontSize: '0.8rem', color: '#94a3b8', lineHeight: 1.6 }}>
               This web application is a frontend demonstration prototype for presentation and evaluation. Biometrics, payments, and railway telemetry are simulated within client-side state.
-            </p>
+            </p> */}
             <div style={{ marginTop: '0.75rem', fontSize: '0.75rem', color: '#64748b' }}>
               🔒 Zero sensitive passenger data stored.
             </div>

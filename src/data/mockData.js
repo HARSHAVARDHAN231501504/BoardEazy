@@ -521,8 +521,8 @@ export const DEMO_USERS = {
     pin: '1234',
     name: 'Meenakshi S',
     role: 'passenger',
-    phone: '+91 98765 00001',
-    normalizedMobile: '9876500001',
+    phone: '+91 9176591451',
+    normalizedMobile: '9176591451',
     googleConnected: true,
     biometricRegistered: true,
     firstTimeSetupDone: true
