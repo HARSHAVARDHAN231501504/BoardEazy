@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useBoardEazy } from '../context/BoardEazyContext';
+import { sendBookingConfirmationSMS } from '../services/notificationService';
 import {
   Train,
   CheckCircle2,
@@ -58,6 +59,28 @@ export const ReviewPaymentPage = () => {
 
       // Create new booking in context
       const newBooking = createBooking(train, passengers, travelClass, quota);
+
+      // Send booking confirmation SMS to each passenger (fire-and-forget)
+      sendBookingConfirmationSMS({
+        pnr: newBooking.mainPnr,
+        trainName: newBooking.trainName,
+        trainNumber: newBooking.trainNumber,
+        journeyDate: newBooking.journeyDate,
+        fromStation: newBooking.fromStation,
+        toStation: newBooking.toStation,
+        passengers: newBooking.passengers.map(p => ({
+          name: p.name,
+          subPnr: p.subPnr,
+          mobile: p.mobile,
+          coach: p.coach,
+          seat: p.seat,
+        })),
+        totalFare: newBooking.fareSummary.total,
+      }).then(result => {
+        if (!result.success) {
+          console.warn('[SMS] Booking confirmation SMS failed:', result.error);
+        }
+      });
 
       setTimeout(() => {
         navigate('/booking-confirmation', {

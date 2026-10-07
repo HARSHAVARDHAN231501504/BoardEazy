@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useBoardEazy } from '../context/BoardEazyContext';
+import { sendStationEntrySMS } from '../services/notificationService';
 import {
   QrCode,
   ShieldCheck,
@@ -21,8 +22,8 @@ export const StationGateScannerPage = () => {
   const [scanResult, setScanResult] = useState(null);
 
   const passengerOptions = [
-    { subPnr: 'PA01', name: 'Harshavardhan S', coach: 'C2', seat: '36' },
-    { subPnr: 'PA02', name: 'Meenakshi S', coach: 'C2', seat: '37' }
+    { subPnr: 'PA01', name: 'Harshavardhan S', coach: 'C2', seat: '36', mobile: '+919176591451' },
+    { subPnr: 'PA02', name: 'Meenakshi S', coach: 'C2', seat: '37', mobile: '+919176591451' }
   ];
 
   const handleSimulateScan = () => {
@@ -35,6 +36,21 @@ export const StationGateScannerPage = () => {
 
       // Update state in context
       updatePassengerStatus('4567891234', selectedSubPnr, 'STATION_ENTERED', scanTime);
+
+      // Send station entry SMS (fire-and-forget)
+      sendStationEntrySMS({
+        name: p.name,
+        subPnr: p.subPnr,
+        mobile: p.mobile || '+919176591451', // fallback for demo hardcoded passengers
+        coach: p.coach,
+        seat: p.seat,
+        gateId: 'GATE-MAS-NORTH-04',
+        scanTime,
+      }).then(result => {
+        if (!result.success) {
+          console.warn('[SMS] Station entry SMS failed:', result.error);
+        }
+      });
 
       setScanResult({
         name: p.name,

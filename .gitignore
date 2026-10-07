@@ -22,3 +22,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Environment variables (NEVER commit credentials)
+.env
+backend/.env
+backend/venv
+backend/__pycache__
+backend/**/__pycache__
+*.pyc

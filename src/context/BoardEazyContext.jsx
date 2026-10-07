@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { sendRacUpgradeSMS } from '../services/notificationService';
 import {
   INITIAL_STATIONS,
   INITIAL_TRAINS,
@@ -380,6 +381,20 @@ export const BoardEazyProvider = ({ children }) => {
       },
       ...prev
     ]);
+
+    // Send RAC upgrade SMS (fire-and-forget)
+    sendRacUpgradeSMS({
+      name: topRac.name,
+      racId: topRac.racId,
+      mobile: topRac.mobile || '+919176591451', // fallback for demo data
+      coach: 'C2',
+      seat: targetSeat.toString(),
+      trainName: '20607 Chennai – Mysuru Vande Bharat',
+    }).then(result => {
+      if (!result.success) {
+        console.warn('[SMS] RAC upgrade SMS failed:', result.error);
+      }
+    });
 
     return {
       success: true,

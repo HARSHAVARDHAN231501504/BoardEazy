@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useBoardEazy } from '../context/BoardEazyContext';
 import BiometricScanner from '../components/BiometricScanner';
+import { sendBoardedSMS } from '../services/notificationService';
 import {
   Train,
   Fingerprint,
@@ -21,8 +22,8 @@ export const TrainGateBiometricPage = () => {
   const [boardedRecord, setBoardedRecord] = useState(null);
 
   const passengerList = [
-    { subPnr: 'PA01', name: 'Harshavardhan S', coach: 'C2', seat: '36' },
-    { subPnr: 'PA02', name: 'Meenakshi S', coach: 'C2', seat: '37' }
+    { subPnr: 'PA01', name: 'Harshavardhan S', coach: 'C2', seat: '36', mobile: '+919176591451' },
+    { subPnr: 'PA02', name: 'Meenakshi S', coach: 'C2', seat: '37', mobile: '+919176591451' }
   ];
 
   const activeP = passengerList.find(p => p.subPnr === selectedSubPnr) || passengerList[0];
@@ -41,6 +42,21 @@ export const TrainGateBiometricPage = () => {
       timestamp,
       status: 'BOARDED',
       gateLocation: 'Coach C2 Automated Sliding Door (MAS Platform 1)'
+    });
+
+    // Send boarded SMS (fire-and-forget)
+    sendBoardedSMS({
+      name: activeP.name,
+      subPnr: activeP.subPnr,
+      mobile: activeP.mobile || '+919176591451',
+      coach: activeP.coach,
+      seat: activeP.seat,
+      trainName: 'Chennai – Mysuru Vande Bharat (20607)',
+      scanTime: timestamp,
+    }).then(result => {
+      if (!result.success) {
+        console.warn('[SMS] Boarded SMS failed:', result.error);
+      }
     });
   };
 
